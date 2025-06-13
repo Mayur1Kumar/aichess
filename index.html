@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>AI Chess</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            /* Added overflow: hidden to html as well for extra precaution */
+            overflow: hidden;
+            overscroll-behavior: none;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #ffffff;
+            /* Default for portrait: hide game content, show message */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Orientation Message */
+        #orientation-message {
+            display: flex; /* Show by default (in portrait) */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            width: 100vw;
+            text-align: center;
+            font-size: 1.5rem;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        /* Game Content (hidden by default) */
+        #game-content {
+            display: none; /* Hidden by default (in portrait) */
+            width: 100vw;
+            min-height: 100vh;
+            flex-direction: row; /* For landscape layout */
+            justify-content: flex-start; /* Board on the left */
+            align-items: stretch; /* Both board and right panel stretch height */
+        }
+
+        /* Chess Board specific styles */
+        .chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            grid-template-rows: repeat(8, 1fr);
+            /* Landscape specific sizing and positioning */
+            height: 100vh; /* Fit to screen height */
+            width: 100vh; /* Make it square based on height */
+            max-width: 100vw; /* Ensure it doesn't exceed screen width */
+            border: none; /* No border for flush look */
+            box-shadow: none; /* No shadow for flush look */
+            border-radius: 0; /* No border-radius for flush look */
+            overflow: hidden;
+            flex-shrink: 0; /* Prevent board from shrinking */
+        }
+
+        /* Right Panel Container */
+        .right-panel {
+            flex-grow: 1; /* Takes remaining width */
+            height: 100vh; /* Takes full height */
+            background-color: #1a202c; /* Background for the right section */
+            padding: 20px; /* Internal padding */
+            box-sizing: border-box;
+            display: flex; /* Make it a flex container */
+            flex-direction: column; /* Stack children vertically */
+            justify-content: space-between; /* Space out top, middle, bottom elements */
+            align-items: center; /* Center children horizontally */
+        }
+
+        /* Sections within Right Panel */
+        .right-top-section {
+            width: 100%;
+            display: flex; /* Flex container for timer, status, start button */
+            flex-direction: column; /* Stack them vertically */
+            align-items: center; /* Center them horizontally */
+            gap: 20px; /* Space between elements */
+        }
+
+        .right-bottom-section {
+            width: 100%;
+            margin-bottom: 20px; /* Space from bottom edge */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .timer-display {
+            display: flex;
+            justify-content: center; /* Center timer(s) horizontally */
+            width: 100%;
+            font-size: clamp(1.8rem, 6vmin, 3rem); /* Larger timer font */
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+            background-color: #2d3748; /* Darker background for timer */
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+        }
+        .timer {
+            text-align: center;
+        }
+        .timer.active {
+            color: #48bb78; /* Green for active timer */
+        }
+
+        .status-bar {
+            font-size: clamp(1.2rem, 5vmin, 2rem);
+            font-weight: bold;
+            text-align: center;
+            min-height: 30px;
+            word-wrap: break-word;
+            /* margin-top will be handled by gap in .right-top-section */
+        }
+
+        .start-button {
+            padding: 15px 30px;
+            font-size: clamp(1.1rem, 4vmin, 1.4rem);
+            font-weight: bold;
+            border-radius: 9999px;
+            background-image: linear-gradient(to right, #48bb78, #38a169); /* Green gradient */
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            width: 90%; /* Take most of the section width */
+            max-width: 300px; /* Limit button width */
+            /* margin-top will be handled by gap in .right-top-section */
+        }
+
+        .start-button:hover {
+            background-image: linear-gradient(to right, #38a169, #2f855a);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .start-button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Horizontal Button Group */
+        .button-group {
+            display: flex;
+            flex-direction: row; /* Buttons are now horizontal */
+            justify-content: space-around; /* Distribute space evenly */
+            align-items: center;
+            gap: 10px; /* Space between buttons */
+            width: 100%;
+            flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+        }
+
+        .button {
+            padding: 12px 15px; /* Adjusted padding for horizontal fit */
+            font-size: clamp(0.9rem, 3.5vmin, 1.1rem); /* Adjusted font size */
+            font-weight: bold;
+            border-radius: 9999px;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            background-image: linear-gradient(to right, #6b46c1, #805ad5);
+            color: #ffffff;
+            border: none;
+            cursor: pointer;
+            outline: none;
+            flex-grow: 1; /* Allow buttons to grow and fill space */
+            max-width: 150px; /* Max width for individual buttons */
+            min-width: 80px; /* Min width to prevent squishing */
+            text-align: center;
+        }
+        .button:hover {
+            background-image: linear-gradient(to right, #553c9a, #6b46c1);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+        }
+        .button:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+
+        /* Piece & Square common styles */
+        .square {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 4vmin; /* Relative to viewport for scaling */
+            cursor: default;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+        .square.light { background-color: #f7fafc; }
+        .square.dark { background-color: #a0aec0; }
+        .square.selected { background-color: #ecc94b; }
+        .square.possible-move { background-color: #48bb78; }
+        .square.attack-move { background-color: #e53e3e; }
+        .piece {
+            font-size: 6vmin; /* Relative to viewport for scaling */
+            line-height: 1;
+            cursor: default;
+        }
+        .piece.white {
+            color: #ffffff;
+            /* Added text-shadow for visibility on white squares */
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7), 0 0 5px rgba(0, 0, 0, 0.5);
+        }
+        .piece.black {
+            color: #2d3748;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.7);
+        }
+
+        /* Landscape Orientation Rules - OVERRIDE DEFAULT */
+        @media (orientation: landscape) {
+            #orientation-message {
+                display: none; /* Hide message in landscape */
+            }
+            #game-content {
+                display: flex; /* Show game content in landscape */
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-200">
+
+    <div id="orientation-message">
+        <p>Please rotate your device to landscape mode to play the game.</p>
+        <p>This game is designed for landscape orientation only.</p>
+    </div>
+
+    <div id="game-content">
+        <div id="chess-board" class="chess-board"></div>
+
+        <div class="right-panel">
+            <div class="right-top-section">
+                <div class="timer-display">
+                    <div id="white-timer" class="timer active">10:00</div>
+                </div>
+                <div id="status" class="status-bar text-green-400">Press Start to Play</div>
+                <button id="start-game-button" class="start-button">Start Game</button>
+            </div>
+
+            <div class="right-bottom-section">
+                <div class="button-group">
+                    <button id="undo-button" class="button" disabled>Undo</button>
+                    <button id="draw-button" class="button" disabled>Offer Draw</button>
+                    <button id="reset-button" class="button" disabled>Reset Game</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script>
+        const game = new Chess();
+        const boardElement = document.getElementById('chess-board');
+        const statusElement = document.getElementById('status');
+        const resetButton = document.getElementById('reset-button');
+        const drawButton = document.getElementById('draw-button');
+        const undoButton = document.getElementById('undo-button'); // New Undo button
+        const startGameButton = document.getElementById('start-game-button');
+
+        const whiteTimerElement = document.getElementById('white-timer');
+
+        let selectedSquare = null;
+        let whiteTurn = true; // True if it's white's turn (human player)
+        let gameOver = false;
+        let gameStarted = false;
+        let pausedTurn = null; // To store whose turn it was when hidden (only relevant for white's timer)
+
+        const initialTime = 10 * 60 * 1000; // 10 minutes
+        let whiteTimeRemaining = initialTime;
+        let whiteTimerInterval;
+        let lastMoveTime; // Used for accurate timer updates after a pause
+
+        const pieces = {
+            'p': '♟', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚',
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔'
+        };
+
+        const pieceValues = {
+            'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000
+        };
+
+        const Pst = {
+            'p': [
+                [0, 0, 0, 0, 0, 0, 0, 0], [50, 50, 50, 50, 50, 50, 50, 50],
+                [10, 10, 20, 30, 30, 20, 10, 10], [5, 5, 10, 25, 25, 10, 5, 5],
+                [0, 0, 0, 20, 20, 0, 0, 0], [5, -5, -10, 0, 0, -10, -5, 5],
+                [5, 10, 10, -20, -20, 10, 10, 5], [0, 0, 0, 0, 0, 0, 0, 0]
+            ],
+            'n': [
+                [-50, -40, -30, -30, -30, -30, -40, -50], [-40, -20, 0, 0, 0, 0, -20, -40],
+                [-30, 0, 10, 15, 15, 10, 0, -30], [-30, 5, 15, 20, 20, 15, 5, -30],
+                [-30, 0, 15, 20, 20, 15, 0, -30], [-30, 5, 10, 15, 15, 10, 5, -30],
+                [-40, -20, 0, 5, 5, 0, -20, -40], [-50, -40, -30, -30, -30, -30, -40, -50]
+            ],
+            'b': [
+                [-20, -10, -10, -10, -10, -10, -10, -20], [-10, 0, 0, 0, 0, 0, 0, -10],
+                [-10, 0, 5, 10, 10, 5, 0, -10], [-10, 5, 5, 10, 10, 5, 5, -10],
+                [-10, 0, 10, 10, 10, 10, 0, -10], [-10, 10, 10, 10, 10, 10, 10, -10],
+                [-10, 5, 0, 0, 0, 0, 5, -10], [-20, -10, -10, -10, -10, -10, -10, -20]
+            ],
+            'r': [
+                [0, 0, 0, 0, 0, 0, 0, 0], [5, 10, 10, 10, 10, 10, 10, 5],
+                [-5, 0, 0, 0, 0, 0, 0, -5], [-5, 0, 0, 0, 0, 0, 0, -5],
+                [-5, 0, 0, 0, 0, 0, 0, -5], [-5, 0, 0, 0, 0, 0, 0, -5],
+                [-5, 0, 0, 0, 0, 0, 0, -5], [0, 0, 0, 5, 5, 0, 0, 0]
+            ],
+            'q': [
+                [-20, -10, -10, -5, -5, -10, -10, -20], [-10, 0, 0, 0, 0, 0, 0, -10],
+                [-10, 0, 5, 5, 5, 5, 0, -10], [-5, 0, 5, 5, 5, 5, 0, -5],
+                [0, 0, 5, 5, 5, 5, 0, -5], [-10, 5, 5, 5, 5, 5, 0, -10],
+                [-10, 0, 5, 0, 0, 0, 0, -10], [-20, -10, -10, -5, -5, -10, -10, -20]
+            ],
+            'k': [
+                [-30, -40, -40, -50, -50, -40, -40, -30], [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-30, -40, -40, -50, -50, -40, -40, -30], [-30, -40, -40, -50, -50, -40, -40, -30],
+                [-20, -30, -30, -40, -40, -30, -30, -20], [-10, -20, -20, -20, -20, -20, -20, -10],
+                [20, 20, 0, 0, 0, 0, 20, 20], [20, 30, 10, 0, 0, 10, 30, 20]
+            ]
+        };
+
+        function formatTime(ms) {
+            const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        // Only one timer for White (Human)
+        function startWhiteTimer() {
+            stopWhiteTimer(); // Ensure any existing interval is cleared
+            lastMoveTime = Date.now();
+            whiteTimerElement.classList.add('active');
+            whiteTimerInterval = setInterval(() => {
+                const now = Date.now();
+                const elapsed = now - lastMoveTime;
+                whiteTimeRemaining -= elapsed;
+                lastMoveTime = now; // Update lastMoveTime for the next interval
+                updateTimerDisplay();
+                if (whiteTimeRemaining <= 0) {
+                    gameOver = true;
+                    stopWhiteTimer();
+                    statusElement.innerText = "Game over, White ran out of time! Black wins!";
+                    statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-yellow-400');
+                    statusElement.classList.add('text-red-500');
+                    disableBoardClicks();
+                    disableButtons(); // Disable all game-play buttons
+                }
+            }, 1000); // Update every second
+        }
+
+        function stopWhiteTimer() {
+            clearInterval(whiteTimerInterval);
+            whiteTimerInterval = null;
+            whiteTimerElement.classList.remove('active');
+        }
+
+        function updateTimerDisplay() {
+            whiteTimerElement.innerText = formatTime(whiteTimeRemaining);
+        }
+
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            const board = game.board();
+
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const square = document.createElement('div');
+                    const rank = 8 - i;
+                    const file = String.fromCharCode(97 + j);
+                    const squareName = file + rank;
+
+                    const isLight = (i + j) % 2 === 0;
+                    square.classList.add('square', isLight ? 'light' : 'dark');
+                    square.dataset.square = squareName;
+
+                    const piece = board[i][j];
+                    if (piece) {
+                        const pieceElement = document.createElement('span');
+                        pieceElement.classList.add('piece', piece.color === 'w' ? 'white' : 'black');
+                        pieceElement.innerHTML = pieces[piece.type.toLowerCase()];
+                        square.appendChild(pieceElement);
+                    }
+                    boardElement.appendChild(square);
+                }
+            }
+            updateStatus();
+        }
+
+        function updateStatus() {
+            let status = '';
+
+            if (game.in_checkmate()) {
+                gameOver = true;
+                status = `Game over, ${game.turn() === 'w' ? 'Black' : 'White'} wins by checkmate!`;
+                statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-yellow-400');
+                statusElement.classList.add('text-red-500');
+                disableBoardClicks();
+                stopWhiteTimer(); // Stop white's timer
+                disableButtons();
+            } else if (game.in_draw()) {
+                gameOver = true;
+                if (game.in_stalemate()) {
+                    status = 'Game over, draw by stalemate!';
+                } else if (game.in_threefold_repetition()) {
+                    status = 'Game over, draw by threefold repetition!';
+                } else if (game.in_fifty_move_draw()) {
+                    status = 'Game over, draw by 50-move rule!';
+                } else if (game.insufficient_material()) {
+                    status = 'Game over, draw by insufficient material!';
+                } else {
+                    status = 'Game over, draw!';
+                }
+                statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-red-400');
+                statusElement.classList.add('text-yellow-400');
+                disableBoardClicks();
+                stopWhiteTimer(); // Stop white's timer
+                disableButtons();
+            } else if (gameStarted) {
+                status = `${game.turn() === 'w' ? 'White' : 'Black'}'s turn`;
+                if (game.in_check()) {
+                    status += (game.turn() === 'w' ? ' (White in check!)' : ' (Black in check!)');
+                    statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-yellow-400');
+                    statusElement.classList.add('text-red-400');
+                } else {
+                    statusElement.classList.remove('text-red-500', 'text-yellow-400', 'text-blue-400', 'text-red-400');
+                    statusElement.classList.add('text-green-400');
+                }
+            } else {
+                 status = "Press Start to Play";
+                 statusElement.classList.remove('text-red-500', 'text-yellow-400', 'text-blue-400', 'text-red-400');
+                 statusElement.classList.add('text-green-400');
+            }
+            statusElement.innerText = status;
+            // Update undo button state based on game history
+            // Enable undo only if game started, not over, and there's at least one pair of moves (player + AI)
+            if (game.history().length >= 2 && gameStarted && !gameOver) {
+                undoButton.disabled = false;
+                undoButton.style.opacity = 1;
+                undoButton.style.cursor = 'pointer';
+            } else {
+                undoButton.disabled = true;
+                undoButton.style.opacity = 0.5;
+                undoButton.style.cursor = 'not-allowed';
+            }
+        }
+
+        function attachSquareEventListeners() {
+            document.querySelectorAll('.square').forEach(square => {
+                square.removeEventListener('click', handleSquareClick);
+                if (!gameOver && gameStarted) {
+                    square.addEventListener('click', handleSquareClick);
+                }
+            });
+        }
+
+        function handleSquareClick(event) {
+            if (gameOver || !gameStarted || game.turn() === 'b') return; // Prevent clicks if AI's turn
+
+            const clickedSquare = event.currentTarget;
+            const squareName = clickedSquare.dataset.square;
+
+            if (selectedSquare) {
+                const fromSquare = selectedSquare.dataset.square;
+                const toSquare = squareName;
+
+                let promotion = 'q'; // Default to queen promotion
+                const pieceOnFrom = game.get(fromSquare);
+                if (pieceOnFrom && pieceOnFrom.type === 'p' && pieceOnFrom.color === 'w' && toSquare[1] === '8') {
+                    // Could add a popup for promotion choice here
+                }
+
+                const move = game.move({
+                    from: fromSquare,
+                    to: toSquare,
+                    promotion: promotion
+                });
+
+                if (move) {
+                    whiteTurn = false; // It's now AI's turn
+                    renderBoard();
+                    clearHighlights();
+                    stopWhiteTimer(); // Stop human's timer
+
+                    // AI makes a move after a short delay
+                    setTimeout(makeAIMove, 500);
+                } else {
+                    const newClickedPiece = game.get(squareName);
+                    // If a square is selected, but the new click is on another of white's pieces,
+                    // re-select that piece. Otherwise, deselect.
+                    if (newClickedPiece && newClickedPiece.color === 'w' && game.turn() === 'w') {
+                        selectedSquare = clickedSquare;
+                        highlightPossibleMoves(squareName);
+                    } else {
+                         selectedSquare = null;
+                         clearHighlights();
+                    }
+                }
+            } else {
+                // If no square is selected, and a white piece is clicked, select it.
+                const piece = game.get(squareName);
+                if (piece && piece.color === 'w' && game.turn() === 'w') {
+                    selectedSquare = clickedSquare;
+                    highlightPossibleMoves(squareName);
+                }
+            }
+        }
+
+        function highlightPossibleMoves(squareName) {
+            clearHighlights();
+
+            const moves = game.moves({
+                square: squareName,
+                verbose: true
+            });
+
+            document.querySelector(`[data-square="${squareName}"]`).classList.add('selected');
+
+            moves.forEach(move => {
+                const targetSquare = document.querySelector(`[data-square="${move.to}"]`);
+                if (targetSquare) {
+                    if (move.flags.includes('c') || move.flags.includes('e')) {
+                        targetSquare.classList.add('attack-move');
+                    } else {
+                        targetSquare.classList.add('possible-move');
+                    }
+                }
+            });
+        }
+
+        function clearHighlights() {
+            document.querySelectorAll('.square').forEach(square => {
+                square.classList.remove('selected', 'possible-move', 'attack-move');
+            });
+        }
+
+        function disableBoardClicks() {
+            document.querySelectorAll('.square').forEach(square => {
+                square.removeEventListener('click', handleSquareClick);
+                square.style.cursor = 'default';
+            });
+             document.querySelectorAll('.piece').forEach(piece => {
+                piece.style.cursor = 'default';
+            });
+        }
+
+        function enableBoardClicks() {
+            attachSquareEventListeners();
+            document.querySelectorAll('.square').forEach(square => {
+                square.style.cursor = 'pointer';
+            });
+            document.querySelectorAll('.piece').forEach(piece => {
+                const squareName = piece.parentElement.dataset.square;
+                const pieceOnSquare = game.get(squareName);
+                if (pieceOnSquare && pieceOnSquare.color === 'w') { // Only white pieces are draggable for white turn
+                    piece.style.cursor = 'grab';
+                } else {
+                    piece.style.cursor = 'default';
+                }
+            });
+        }
+
+        function stopAllTimers() {
+            stopWhiteTimer();
+        }
+
+        function disableButtons() {
+            resetButton.disabled = false; // Always allow reset after game starts/ends
+            drawButton.disabled = true;
+            drawButton.style.opacity = 0.5;
+            drawButton.style.cursor = 'not-allowed';
+            undoButton.disabled = true; // Undo disabled by default or when no moves
+            undoButton.style.opacity = 0.5;
+            undoButton.style.cursor = 'not-allowed';
+        }
+
+        function enableButtons() {
+            resetButton.disabled = false;
+            drawButton.disabled = false;
+            drawButton.style.opacity = 1;
+            drawButton.style.cursor = 'pointer';
+            // Undo button state is managed by updateStatus based on history length
+        }
+
+        function evaluateBoard(boardState) {
+            let score = 0;
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const piece = boardState[i][j];
+                    if (piece) {
+                        const pieceVal = pieceValues[piece.type.toLowerCase()];
+                        let pstVal = 0;
+                        if (Pst[piece.type.toLowerCase()]) {
+                            // PST for white pieces uses original index
+                            // PST for black pieces uses mirrored index (7-i for rank)
+                            pstVal = (piece.color === 'w') ? Pst[piece.type.toLowerCase()][i][j] : Pst[piece.type.toLowerCase()][7 - i][j];
+                        }
+
+                        if (piece.color === 'w') {
+                            score += (pieceVal + pstVal);
+                        } else {
+                            score -= (pieceVal + pstVal);
+                        }
+                    }
+                }
+            }
+
+            // Add bonus/penalty for game end states
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    // If it's black's turn and checkmate, means white just checkmated black (positive score for white)
+                    // If it's white's turn and checkmate, means black just checkmated white (negative score for white)
+                    return (game.turn() === 'b') ? 100000 : -100000;
+                }
+                if (game.in_draw()) {
+                    return 0; // Draw is 0 score
+                }
+            }
+            return score;
+        }
+
+        // Minimax with Alpha-Beta Pruning
+        function minimax(depth, gameInstance, alpha, beta, isMaximizingPlayer) {
+            if (depth === 0 || gameInstance.game_over()) {
+                return evaluateBoard(gameInstance.board());
+            }
+
+            const possibleMoves = gameInstance.moves({ verbose: true });
+            // Sort moves: prioritize captures for better alpha-beta pruning performance
+            possibleMoves.sort((a, b) => {
+                const aIsCapture = a.flags.includes('c') || a.flags.includes('e');
+                const bIsCapture = b.flags.includes('c') || b.flags.includes('e');
+                if (aIsCapture && !bIsCapture) return -1; // Captures first
+                if (!aIsCapture && bIsCapture) return 1;
+                return 0;
+            });
+
+
+            if (isMaximizingPlayer) { // White's turn (maximizing player)
+                let maxEval = -Infinity;
+                for (let i = 0; i < possibleMoves.length; i++) {
+                    const move = possibleMoves[i];
+                    gameInstance.move(move);
+                    const evaluation = minimax(depth - 1, gameInstance, alpha, beta, false); // Recurse for opponent
+                    gameInstance.undo();
+                    maxEval = Math.max(maxEval, evaluation);
+                    alpha = Math.max(alpha, evaluation);
+                    if (beta <= alpha) { // Alpha-beta pruning
+                        break;
+                    }
+                }
+                return maxEval;
+            } else { // Black's turn (minimizing player)
+                let minEval = Infinity;
+                for (let i = 0; i < possibleMoves.length; i++) {
+                    const move = possibleMoves[i];
+                    gameInstance.move(move);
+                    const evaluation = minimax(depth - 1, gameInstance, alpha, beta, true); // Recurse for opponent
+                    gameInstance.undo();
+                    minEval = Math.min(minEval, evaluation);
+                    beta = Math.min(beta, evaluation);
+                    if (beta <= alpha) { // Alpha-beta pruning
+                        break;
+                    }
+                }
+                return minEval;
+            }
+        }
+
+        async function makeAIMove() {
+            if (gameOver || !gameStarted) return;
+
+            statusElement.innerText = "AI is thinking...";
+            statusElement.classList.remove('text-green-400');
+            statusElement.classList.add('text-blue-400');
+
+            // Add a small artificial delay for AI "thinking" to make it feel more natural
+            await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 500));
+
+            const possibleMoves = game.moves({ verbose: true });
+
+            if (possibleMoves.length === 0) {
+                updateStatus();
+                return;
+            }
+
+            let bestMove = null;
+            let bestValue = Infinity; // We are minimizing for Black
+
+            const searchDepth = 3; // AI thinking depth
+
+            for (let i = 0; i < possibleMoves.length; i++) {
+                const move = possibleMoves[i];
+                game.move(move);
+                // Evaluate board from White's perspective (maximizing)
+                const boardValue = minimax(searchDepth - 1, game, -Infinity, Infinity, true);
+                game.undo();
+
+                if (boardValue < bestValue) { // Find the move that results in the lowest score for White (best for Black)
+                    bestValue = boardValue;
+                    bestMove = move;
+                }
+            }
+
+            if (bestMove) {
+                game.move(bestMove);
+                whiteTurn = true; // It's now white's turn again
+                renderBoard();
+
+                if (!gameOver) {
+                    startWhiteTimer(); // Start white's timer again
+                }
+                enableBoardClicks();
+            } else {
+                console.error("AI could not find a move, but game is not over.");
+                updateStatus();
+            }
+        }
+
+        function undoLastMoves() {
+            // Can only undo if game started, not over, and there are at least two moves (Player + AI)
+            if (!gameStarted || gameOver || game.history().length < 2) {
+                return;
+            }
+
+            stopAllTimers(); // Pause timers for undo operation
+
+            // Undo AI's last move
+            game.undo();
+            // Undo player's last move
+            game.undo();
+
+            // Reset game over flag if we undo past a game-ending state
+            gameOver = false;
+            whiteTurn = true; // It's always White's turn after undoing their move
+            renderBoard();
+            startWhiteTimer(); // Restart White's timer
+            enableBoardClicks();
+            enableButtons(); // Ensure buttons are enabled after undo
+            updateStatus(); // Update status and undo button state
+        }
+
+
+        function startGame() {
+            if (gameStarted) return;
+            gameStarted = true;
+            startGameButton.style.display = 'none';
+
+            game.reset(); // Reset the chess.js game state
+            selectedSquare = null;
+            whiteTurn = true;
+            gameOver = false;
+            stopAllTimers(); // Stop any lingering timers
+            whiteTimeRemaining = initialTime; // Reset white's time
+            updateTimerDisplay();
+
+            renderBoard(); // Draw the initial board
+            startWhiteTimer(); // Start white's timer
+            enableButtons(); // Enable reset/draw/undo buttons
+            enableBoardClicks(); // Enable human player clicks
+            updateStatus(); // Update status message
+        }
+
+        function resetGame() {
+            game.reset();
+            selectedSquare = null;
+            whiteTurn = true;
+            gameOver = false;
+            gameStarted = false; // Game is no longer "started"
+            stopAllTimers(); // Stop timers
+            whiteTimeRemaining = initialTime; // Reset white's time
+            updateTimerDisplay(); // Update timer display
+            renderBoard(); // Draw the initial board
+
+            startGameButton.style.display = 'block'; // Show start button again
+            updateStatus(); // Reset status message
+            disableButtons(); // Disable draw/undo buttons until game starts
+            disableBoardClicks(); // Disable board clicks until game starts
+        }
+
+        // Function to handle visibility changes (tab focus/blur)
+        function handleVisibilityChange() {
+            if (!gameStarted || gameOver) {
+                // Do nothing if the game hasn't started or is already over
+                return;
+            }
+
+            if (document.hidden) {
+                // Tab is hidden, pause timers
+                stopAllTimers();
+                pausedTurn = game.turn(); // Store whose turn it was (only matters if white's turn)
+                statusElement.innerText = "Game Paused (Tab Hidden)";
+                statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-red-400');
+                statusElement.classList.add('text-yellow-400');
+            } else {
+                // Tab is visible again, resume timers
+                statusElement.classList.remove('text-yellow-400');
+                // Only white's timer needs to be resumed if it was white's turn when paused
+                if (pausedTurn === 'w') {
+                    whiteTurn = true; // Ensure whiteTurn is correct for timer
+                    startWhiteTimer();
+                }
+                pausedTurn = null; // Clear the paused turn
+                updateStatus(); // Resume normal status display
+            }
+        }
+
+
+        // Event Listeners
+        drawButton.addEventListener('click', () => {
+            if (confirm("Do you agree to a draw?")) {
+                gameOver = true;
+                stopAllTimers();
+                statusElement.innerText = "Game over, draw by agreement!";
+                statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-red-400');
+                statusElement.classList.add('text-yellow-400');
+                disableBoardClicks();
+                disableButtons();
+            }
+        });
+
+        resetButton.addEventListener('click', resetGame);
+        startGameButton.addEventListener('click', startGame);
+        undoButton.addEventListener('click', undoLastMoves); // New undo button listener
+
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Initial setup when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            renderBoard(); // Initial render of the board
+            updateTimerDisplay(); // Display initial time
+            disableButtons(); // Disable game-play buttons initially
+            disableBoardClicks(); // Disable board clicks until game starts
+            updateStatus(); // Set initial status message
+
+            // Check initial orientation and set display accordingly
+            if (window.innerHeight > window.innerWidth) { // Portrait
+                document.getElementById('game-content').style.display = 'none';
+                document.getElementById('orientation-message').style.display = 'flex';
+            } else { // Landscape
+                document.getElementById('game-content').style.display = 'flex';
+                document.getElementById('orientation-message').style.display = 'none';
+            }
+        });
+
+        // Listen for orientation changes (window resize)
+        window.addEventListener('resize', () => {
+            if (window.innerHeight > window.innerWidth) { // Portrait
+                document.getElementById('game-content').style.display = 'none';
+                document.getElementById('orientation-message').style.display = 'flex';
+                stopAllTimers(); // Pause game if user rotates to portrait
+                if (gameStarted && !gameOver) {
+                     pausedTurn = game.turn(); // Store turn if game was active
+                }
+                statusElement.innerText = "Game Paused (Rotate Device)";
+                statusElement.classList.remove('text-green-400', 'text-blue-400', 'text-red-400');
+                statusElement.classList.add('text-yellow-400');
+            } else { // Landscape
+                document.getElementById('game-content').style.display = 'flex';
+                document.getElementById('orientation-message').style.display = 'none';
+                if (gameStarted && !gameOver && pausedTurn) {
+                    // Resume game if it was paused due to orientation change
+                    if (pausedTurn === 'w') {
+                        startWhiteTimer();
+                    }
+                    pausedTurn = null; // Clear paused state
+                    updateStatus(); // Restore game status
+                } else if (!gameStarted) {
+                    updateStatus(); // If game hasn't started, show initial message
+                }
+            }
+        });
+
+        // Add this JavaScript block to prevent pinch zooming
+        document.addEventListener('touchmove', function(event) {
+            // Check if more than one finger is touching (indicating a potential pinch/zoom)
+            // And if the target element isn't an input field or a textarea (to allow scrolling/interaction within those if any)
+            if (event.touches.length > 1 &&
+                !['input', 'textarea', 'select'].includes(event.target.tagName.toLowerCase())) {
+                event.preventDefault(); // Prevent default browser zoom/scroll
+            }
+        }, { passive: false }); // IMPORTANT: { passive: false } is crucial for preventDefault() to work
+
+    </script>
+</body>
+</html>
