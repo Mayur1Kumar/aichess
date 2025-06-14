@@ -20,6 +20,68 @@
         overflow: hidden; /* Prevent scrolling */
     }
 
+    /* Loading Screen Styles */
+    #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #1A202C; /* Same as body background */
+        background-image: url('loading-background.jpg'); /* ADD THIS LINE: Your background image */
+        background-size: cover; /* ADD THIS LINE: Ensures the image covers the screen */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 2000; /* Above everything else */
+        transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+    }
+
+    #loading-screen.hidden {
+        opacity: 0;
+        visibility: hidden;
+    }
+
+    .loading-heading {
+        font-size: 3.5rem; /* Larger font for main heading */
+        font-weight: bold;
+        color: #388EE6; /* CHANGED: From #48BB78 to #388EE6 */
+        margin-bottom: 40px; /* More space below heading */
+        text-shadow: 0 0 15px rgba(56, 142, 230, 0.8); /* CHANGED: From rgba(72, 187, 120, 0.8) */
+    }
+
+    .loading-bar-container {
+        width: 60%;
+        max-width: 400px; /* Slightly wider bar */
+        height: 10px; /* Thicker bar */
+        background-color: #334155;
+        border-radius: 5px;
+        overflow: hidden;
+        margin-top: 30px; /* Space between bar and heading/text */
+        margin-bottom: 20px; /* Space between bar and credit */
+    }
+
+    .loading-bar {
+        width: 0%;
+        height: 100%;
+        background-image: linear-gradient(to right, #388EE6, #388EE6); /* CHANGED: From #2B6CB0, #388EE6 */
+        border-radius: 5px;
+        animation: fillBar 3s forwards; /* Fills over 3 seconds */
+    }
+
+    @keyframes fillBar {
+        from { width: 0%; }
+        to { width: 100%; }
+    }
+
+    .designed-by-text {
+        font-size: 1.2rem; /* Slightly smaller for credit */
+        color: #94A3B8; /* Muted color for credit */
+        margin-top: 10px; /* Space from loading bar */
+    }
+
+
     /* Orientation Message (hidden by default, only shown if portrait is not supported) */
     #orientation-message {
         display: none; /* Hide by default */
@@ -43,6 +105,14 @@
         flex-direction: column; /* Default to column for portrait */
         justify-content: space-between; /* Push board to top, panel to bottom */
         align-items: center;
+        visibility: hidden; /* Initially hidden */
+        opacity: 0; /* Initially transparent */
+        transition: opacity 0.5s ease-out, visibility 0.5s ease-out;
+    }
+
+    #game-content.visible {
+        opacity: 1;
+        visibility: visible;
     }
 
     /* Board Container */
@@ -53,7 +123,7 @@
         justify-content: center;
         align-items: center;
         flex-shrink: 0;
-        margin-top: 50px; /* Align to top in portrait */
+        margin-top: 150px; /* Align to top in portrait */
     }
 
     /* Chess Board specific styles */
@@ -265,7 +335,7 @@
     /* Piece colors for ocean theme (unchanged) */
     .piece.white {
         color: #F8FAFC;
-        text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.9);
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 1);
     }
     .piece.black {
         color: #1A202C;
@@ -425,6 +495,14 @@
 </head>
 <body class="bg-gray-900 text-gray-200">
 
+    <div id="loading-screen">
+        <div class="loading-heading">AI Chess</div>
+        <div class="loading-bar-container">
+            <div class="loading-bar"></div>
+        </div>
+        <div class="designed-by-text">Designed and Developed by Mayur Kumar</div>
+    </div>
+
     <div id="orientation-message">
         <p>This message is not expected to be seen normally in this version.</p>
     </div>
@@ -483,6 +561,11 @@
         const drawOfferModal = document.getElementById('draw-offer-modal');
         const modalYesButton = document.getElementById('modal-yes-button');
         const modalNoButton = document.getElementById('modal-no-button');
+
+        // Loading screen elements
+        const loadingScreen = document.getElementById('loading-screen');
+        const gameContent = document.getElementById('game-content');
+
 
         let selectedSquare = null;
         let whiteTurn = true; // True if it's white's turn (human player)
@@ -1103,6 +1186,12 @@
 
         // Initial setup when the page loads
         document.addEventListener('DOMContentLoaded', () => {
+            // Hide loading screen and show game content after 3 seconds
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+                gameContent.classList.add('visible');
+            }, 3000); // 3 seconds
+
             renderBoard(); // Initial render of the board
             updateTimerDisplay(); // Display initial time
             disableButtons(); // Disable draw/undo buttons
@@ -1122,8 +1211,6 @@
             // via media queries. This block can remain as-is from the original
             // to handle potential pauses if the game was not designed for a specific
             // orientation (though now it's responsive).
-            // For robust handling, one might refine this to only pause if orientation
-            // shifts to a truly unsupported mode.
             // For now, keeping original logic for consistency with user request (don't touch landscape)
             // and this part handles "portrait is not supported" if it were an issue on desktop.
             if (window.innerHeight > window.innerWidth) { // Portrait
